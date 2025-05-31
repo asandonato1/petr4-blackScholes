@@ -1,8 +1,8 @@
 import pandas as pd
 import yfinance as yf
 import numpy as np
-from bs4 import BeautifulSoup
 import selenium
+import time
 from selenium.webdriver.common.by import By
 import re
 from scipy.stats import norm
@@ -43,27 +43,29 @@ def historicalVol():
 
 def intitialPrice(data):
 
-    close = np.asarray([data.loc[date].iloc[0] for date in data.index])
-    open = np.asarray([data.loc[date].iloc[3] for date in data.index])
+    close = np.asarray([data.loc[date].iloc[0] for date in data.index]) # valores no close 
+    open = np.asarray([data.loc[date].iloc[3] for date in data.index]) # valores no open
 
-    time = len(close)
+    time = len(close) # "tempo"... utilizado pra tirar media, so
     avgClose = np.sum(close)/time
-    avgOpen = np.sum(open)/time
+    avgOpen = np.sum(open)/time # medias 
 
-    S0 = np.mean([avgClose, avgOpen])
+    S0 = np.mean([avgClose, avgOpen]) # S0 foi tomado como media da abertura e fechamento
 
     return S0
 
 def selic():
-    driver = selenium.webdriver.Chrome()
+    driver = selenium.webdriver.Chrome() # inicializacao do driver pra fazer scraping com uma pagina com js
 
-    driver.get("https://www.bcb.gov.br/controleinflacao/historicotaxasjuros")
-    
-    element = driver.find_element(by=By.CLASS_NAME, value = "table")
-    
+    driver.get("https://www.bcb.gov.br/controleinflacao/historicotaxasjuros") # obtendo pagina 
 
-    splitting = [i.split("-") for i in element.text.split("\n")[7:]]
-    splitting = [processLine(line) for line in splitting[0:50]]
+    time.sleep(2) # delay necessario pra que a pagina carregue antes do scraping
+    
+    element = driver.find_element(by=By.CLASS_NAME, value = "table") # procurando tabela na pagina
+    
+    # processamento da tabela/dados 
+    splitting = [i.split("-") for i in element.text.split("\n")[7:]] # removendo partes desnecessarias da tabela 
+    splitting = [processLine(line) for line in splitting[0:50]] # nao extreaindo todos os dados
     splitting = np.strings.replace(splitting, ",", ".")
     df = pd.DataFrame(splitting)
     df[[4, 6, 7]] = df[[4, 6, 7]].replace(',', '.', regex=True).astype(np.float32)
@@ -71,12 +73,12 @@ def selic():
 
     
     foo = []
-    for line in splitting[0:3]:
+    for line in splitting[0:3]: # ultimos 6 meses 
         foo.append(line[-1])
     driver.close()
-    return np.mean(foo)
+    return np.mean(foo) # retorna media da selic nos ultimos ~6 meses
 
-def blackScholesCall(S, K, sigma, r, t):
+def blackScholesCall(S, K, sigma, r, t): # modelo de black scholes
     d1 = (np.log(S/K) + (r + sigma**2/2)*t)/(sigma * t**0.5)
     d2 = d1 - (sigma*t**0.5)
     call = S*norm.cdf(d1) - K*np.exp(-r*t)*norm.cdf(d2)
